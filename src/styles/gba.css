@@ -23,34 +23,57 @@ html,
 body {
   margin: 0;
   min-height: 100%;
+  max-width: 100%;
   background:
     radial-gradient(ellipse at 50% 12%, rgba(55, 78, 120, 0.55), transparent 55%),
     radial-gradient(ellipse at 50% 80%, rgba(12, 20, 36, 0.9), #070a10 75%);
   color: #eee;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 #app {
   min-height: 100dvh;
+  min-height: 100svh;
   height: 100dvh;
+  height: 100svh;
   display: grid;
   place-items: stretch;
   padding: 0;
   overflow: hidden;
+  width: 100%;
+  max-width: 100vw;
 }
 
-/* Full-bleed stage for CSS3D + WebGL console framing */
+/* Full-bleed stage: play mode centers flat DOM GBA; inspect uses CSS3D viewport */
 .console-stage {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 100dvh;
+  min-height: 0;
   overflow: hidden;
+  display: grid;
+  place-items: center;
+  padding:
+    max(0.35rem, env(safe-area-inset-top, 0px))
+    max(0.35rem, env(safe-area-inset-right, 0px))
+    max(0.35rem, env(safe-area-inset-bottom, 0px))
+    max(0.35rem, env(safe-area-inset-left, 0px));
 }
 
 .console-viewport {
   position: absolute;
   inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.console-viewport.is-active {
+  opacity: 1;
+  visibility: visible;
 }
 
 .console-gl,
@@ -920,21 +943,36 @@ body {
   }
 }
 
+/* Phones / narrow tablets — stack LCD, fit viewport, usable touch */
 @media (max-width: 640px) {
+  .console-stage {
+    padding:
+      max(0.25rem, env(safe-area-inset-top, 0px))
+      max(0.25rem, env(safe-area-inset-right, 0px))
+      max(0.25rem, env(safe-area-inset-bottom, 0px))
+      max(0.25rem, env(safe-area-inset-left, 0px));
+  }
+
   .gba {
-    width: min(100%, 420px);
+    width: min(100%, 440px);
+    max-width: 100%;
     aspect-ratio: auto;
-    max-height: none;
-    min-height: min(88dvh, 760px);
-    border-radius: 22px;
-    padding: 3% 3.5% 3.5%;
-    gap: 1.8%;
+    max-height: min(96dvh, 100%);
+    min-height: 0;
+    border-radius: 18px;
+    padding: 2.5% 3% 2.2%;
+    gap: 1.2%;
+    overflow: hidden;
+  }
+
+  .gba-chassis {
+    display: none;
   }
 
   .screen {
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(120px, 32%) minmax(0, 1fr);
-    min-height: min(52dvh, 480px);
+    grid-template-rows: auto minmax(88px, 28%) minmax(0, 1fr);
+    min-height: 0;
   }
 
   .list-pane {
@@ -943,34 +981,223 @@ body {
   }
 
   .stage-wrap {
-    min-height: clamp(160px, 26dvh, 240px);
+    min-height: 0;
+  }
+
+  .detail-desc {
+    max-height: 2.7em;
   }
 
   .dpad {
-    width: min(96px, 28vw);
-    height: min(96px, 28vw);
+    width: min(92px, 26vw);
+    height: min(92px, 26vw);
+    margin-left: 2%;
+  }
+
+  .ab {
+    margin-right: 2%;
+    gap: 0.45rem;
   }
 
   .ab button {
-    width: min(46px, 12vw);
-    height: min(46px, 12vw);
+    width: min(48px, 13vw);
+    height: min(48px, 13vw);
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .ab .b {
+    transform: translateY(8px);
+  }
+
+  .ab .a {
+    transform: translateY(-2px);
+  }
+
+  .mid-btns {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    max-width: 7.2rem;
+  }
+
+  .pill {
+    font-size: 0.5rem;
+    padding: 0.4rem 0.55rem;
+    min-height: 32px;
+  }
+
+  .speaker {
+    display: none;
   }
 
   .search-bar {
-    padding: 0.4rem 0.45rem;
+    padding: 0.35rem 0.4rem;
+    gap: 0.3rem;
+  }
+
+  .search-input {
+    font-size: 16px; /* avoid iOS focus zoom */
+    padding: 0.32rem 0.4rem;
   }
 
   .hint-bar {
-    font-size: 0.55rem;
+    font-size: 0.5rem;
+    line-height: 1.25;
+  }
+
+  .brand {
+    font-size: 0.6rem;
   }
 
   .inspect-toggle {
-    width: 2.35rem;
-    height: 2.35rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .inspect-hint {
+    font-size: 0.58rem;
+    padding: 0.3rem 0.65rem;
+  }
+}
+
+/* Portrait phones (~iPhone 390×844): shell fills viewport, no page scroll */
+@media (max-width: 480px) and (orientation: portrait) {
+  #app {
+    height: 100dvh;
+    height: 100svh;
+    max-height: 100dvh;
+    max-height: 100svh;
+  }
+
+  .console-stage {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    place-items: stretch;
+    padding:
+      max(0.15rem, env(safe-area-inset-top, 0px))
+      max(0.2rem, env(safe-area-inset-right, 0px))
+      max(0.15rem, env(safe-area-inset-bottom, 0px))
+      max(0.2rem, env(safe-area-inset-left, 0px));
+  }
+
+  .gba {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    min-height: 0;
+    border-radius: 14px;
+    padding: 1.8% 2.8% 1.6%;
+    gap: 0.8%;
+    box-shadow:
+      inset 0 2px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -6px 14px rgba(0, 0, 0, 0.38),
+      0 10px 28px rgba(0, 0, 0, 0.45);
+  }
+
+  .gba-top {
+    padding-top: 0.05rem;
+  }
+
+  .power {
+    width: 0.55rem;
+    height: 0.55rem;
+  }
+
+  .power-label {
+    font-size: 0.48rem;
+  }
+
+  .screen-bezel {
+    padding: 6px 8px;
+    border-radius: 10px;
+    min-height: 0;
+  }
+
+  .screen {
+    grid-template-rows: auto minmax(96px, 30%) minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .list-item {
+    padding: 0.38rem 0.5rem;
+    min-height: 36px;
+    font-size: 0.82rem;
+  }
+
+  .detail-pane {
+    padding: 0.3rem 0.45rem 0.25rem;
+    gap: 0.2rem;
+  }
+
+  .detail-pane h2 {
+    font-size: 1rem;
+  }
+
+  .detail-meta {
     font-size: 0.62rem;
-    padding: 0.35rem 0.7rem;
+  }
+
+  .detail-desc {
+    max-height: 2.4em;
+    font-size: 0.68rem;
+  }
+
+  .stage-wrap {
+    min-height: 0;
+  }
+
+  .controls {
+    padding: 0.15rem 0.2rem 0;
+    gap: 0.35rem;
+    align-items: end;
+  }
+
+  .dpad {
+    width: min(84px, 23vw);
+    height: min(84px, 23vw);
+    margin-left: 1%;
+  }
+
+  .dpad button {
+    font-size: 0.65rem;
+  }
+
+  .ab button {
+    width: 44px;
+    height: 44px;
+    font-size: 0.85rem;
+  }
+
+  .mid-btns {
+    max-width: 6.8rem;
+    gap: 0.28rem;
+    padding-bottom: 0.35rem;
+  }
+
+  .pill {
+    font-size: 0.48rem;
+    letter-spacing: 0.04em;
+    padding: 0.38rem 0.48rem;
+    min-height: 34px;
+  }
+
+  .hint-bar {
+    display: none;
+  }
+
+  .brand {
+    font-size: 0.55rem;
+    line-height: 1.1;
+    opacity: 0.45;
+  }
+
+  /* Portrait play mode: no CSS3D inspect (avoids scaled hit-targets) */
+  .inspect-toggle,
+  .inspect-hint {
+    display: none !important;
   }
 }
