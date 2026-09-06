@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Cosmidex TF.js weights (~6.3 MB) — download with scripts/fetch-cosmidex-model.sh
+public/model/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

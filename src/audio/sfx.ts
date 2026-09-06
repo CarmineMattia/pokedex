@@ -1,6 +1,6 @@
 import type { Action } from "../input/bus";
 
-export type SfxCue = Action | "boot" | "mute" | "unmute" | "tap";
+export type SfxCue = Action | "boot" | "mute" | "unmute" | "tap" | "type" | "search";
 
 type Tone = {
   freq: number;
@@ -158,6 +158,13 @@ const cues: Record<SfxCue, Tone[]> = {
   ],
   select: [{ freq: 700, dur: 0.05, vol: 0.35 }],
   tap: [{ freq: 740, dur: 0.04, vol: 0.38 }],
+  /** Soft key-click while typing in FIND */
+  type: [{ freq: 920, dur: 0.022, vol: 0.18, type: "square" }],
+  /** Confirm / jump-to-match from search */
+  search: [
+    { freq: 660, dur: 0.04, vol: 0.35 },
+    { freq: 880, dur: 0.055, vol: 0.32, delay: 0.04 },
+  ],
   boot: [
     { freq: 220, dur: 0.08, vol: 0.35 },
     { freq: 330, dur: 0.08, vol: 0.4, delay: 0.09 },

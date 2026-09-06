@@ -59,7 +59,18 @@ export class InputBus {
   }
 
   bindKeyboard() {
+    const isTypingTarget = (t: EventTarget | null) => {
+      if (!(t instanceof HTMLElement)) return false;
+      const tag = t.tagName;
+      return (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        t.isContentEditable
+      );
+    };
     const down = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
       const action = keyMap[e.code];
       if (!action) return;
       e.preventDefault();
@@ -75,6 +86,7 @@ export class InputBus {
       }
     };
     const up = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
       const action = keyMap[e.code];
       if (!action) return;
       e.preventDefault();
