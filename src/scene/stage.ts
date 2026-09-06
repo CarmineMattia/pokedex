@@ -18,10 +18,16 @@ export class PetStage {
   private raf = 0;
   private statusEl: HTMLElement | null = null;
 
+  private dragX = 0;
+  private dragging = false;
+  /** Fired (throttled by caller) when pointer-drag rotates the mesh. */
+  onRotate: (() => void) | null = null;
+
   constructor(host: HTMLElement, statusEl?: HTMLElement | null) {
     this.statusEl = statusEl ?? null;
     this.canvas = document.createElement("canvas");
     this.canvas.className = "stage-canvas";
+    this.canvas.style.touchAction = "none";
     host.appendChild(this.canvas);
 
     this.renderer = new THREE.WebGLRenderer({
@@ -52,8 +58,40 @@ export class PetStage {
     ground.position.y = -0.55;
     this.scene.add(ground);
 
+    this.bindDragRotate();
     this.resize();
     this.loop(0);
+  }
+
+  /** Touch / pointer drag on the sprite stage rotates the mesh (←→ equivalent). */
+  private bindDragRotate() {
+    const el = this.canvas;
+    el.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      e.preventDefault();
+      this.dragging = true;
+      this.dragX = e.clientX;
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    });
+    el.addEventListener("pointermove", (e) => {
+      if (!this.dragging || !this.mesh) return;
+      const dx = e.clientX - this.dragX;
+      this.dragX = e.clientX;
+      if (dx === 0) return;
+      this.mesh.rotation.y += dx * 0.01;
+      this.onRotate?.();
+    });
+    const end = () => {
+      this.dragging = false;
+    };
+    el.addEventListener("pointerup", end);
+    el.addEventListener("pointercancel", end);
+    el.addEventListener("lostpointercapture", end);
+    el.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
   setStatus(msg: string) {

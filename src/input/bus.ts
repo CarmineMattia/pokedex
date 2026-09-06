@@ -47,6 +47,7 @@ export class InputBus {
       if (this.held.has(action)) return;
       this.held.add(action);
     } else {
+      if (!this.held.has(action)) return;
       this.held.delete(action);
       const t = this.repeatTimers.get(action);
       if (t) {
@@ -88,8 +89,15 @@ export class InputBus {
   }
 
   bindButton(el: HTMLElement, action: Action) {
-    const press = (e: Event) => {
+    const press = (e: PointerEvent) => {
+      // Primary button / touch / pen only
+      if (e.pointerType === "mouse" && e.button !== 0) return;
       e.preventDefault();
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore unsupported capture */
+      }
       this.emit(action, true);
       if (
         (action === "up" || action === "down") &&
@@ -105,9 +113,11 @@ export class InputBus {
       e.preventDefault();
       this.emit(action, false);
     };
+    // Capture keeps press/release reliable when the finger slides off the hit target
     el.addEventListener("pointerdown", press);
     el.addEventListener("pointerup", release);
-    el.addEventListener("pointerleave", release);
     el.addEventListener("pointercancel", release);
+    el.addEventListener("lostpointercapture", release);
+    el.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 }

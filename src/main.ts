@@ -1,17 +1,26 @@
 import "./styles/gba.css";
+import { Sfx } from "./audio/sfx";
 import { loadPets, padId, type Pet } from "./data/pets";
-import { InputBus } from "./input/bus";
+import { InputBus, type Action } from "./input/bus";
 import { PetStage } from "./scene/stage";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
-  <div class="gba" role="application" aria-label="Pokédex">
+  <div class="gba is-booting" role="application" aria-label="Pokédex">
     <div class="gba-top">
       <span class="power" aria-hidden="true"></span>
       <span class="power-label">POWER</span>
     </div>
     <div class="screen-bezel">
       <div class="screen">
+        <div class="boot-overlay" id="boot" aria-busy="true" aria-live="polite">
+          <div class="boot-glow" aria-hidden="true"></div>
+          <div class="boot-scanlines" aria-hidden="true"></div>
+          <div class="boot-splash">
+            <p class="boot-title">Pokédex</p>
+            <p class="boot-copy">GAME BOY COLOR</p>
+          </div>
+        </div>
         <div class="list-pane" id="list"></div>
         <div class="detail-pane">
           <div>
@@ -22,7 +31,7 @@ app.innerHTML = `
           <div class="stage-wrap" id="stage">
             <div class="stage-status" id="stageStatus"></div>
           </div>
-          <div class="hint-bar">↑↓ list · ←→ rotate · A open · B top · Shift START</div>
+          <div class="hint-bar">↑↓ list · ←→ / drag rotate · A open · B top · START gen · hold SELECT mute</div>
         </div>
       </div>
     </div>
@@ -48,6 +57,8 @@ app.innerHTML = `
   </div>
 `;
 
+const gbaEl = document.querySelector<HTMLDivElement>(".gba")!;
+const bootEl = document.querySelector<HTMLDivElement>("#boot")!;
 const listEl = document.querySelector<HTMLDivElement>("#list")!;
 const nameEl = document.querySelector<HTMLHeadingElement>("#name")!;
 const metaEl = document.querySelector<HTMLParagraphElement>("#meta")!;
@@ -55,18 +66,28 @@ const descEl = document.querySelector<HTMLParagraphElement>("#desc")!;
 const stageHost = document.querySelector<HTMLDivElement>("#stage")!;
 const stageStatus = document.querySelector<HTMLDivElement>("#stageStatus")!;
 
+const sfx = new Sfx();
+sfx.installGestureUnlock();
+
 const bus = new InputBus();
 bus.bindKeyboard();
 document.querySelectorAll<HTMLElement>("[data-action]").forEach((el) => {
-  bus.bindButton(el, el.dataset.action as Parameters<typeof bus.bindButton>[1]);
+  bus.bindButton(el, el.dataset.action as Action);
 });
 
 const stage = new PetStage(stageHost, stageStatus);
+stage.onRotate = () => sfx.playRotateTick();
 window.addEventListener("resize", () => stage.resize());
 
 let pets: Pet[] = [];
 let index = 0;
 let filterGen: number | "all" = "all";
+/** Blocks gameplay inputs until boot splash finishes (SFX still unlock on gesture). */
+let inputReady = false;
+
+/** SELECT long-press (≥650ms) toggles mute without clearing the gen filter. */
+let selectHoldTimer: number | null = null;
+let selectWasLong = false;
 
 function visiblePets() {
   if (filterGen === "all") return pets;
@@ -86,8 +107,10 @@ function renderList() {
     .join("");
   listEl.querySelectorAll<HTMLElement>(".list-item").forEach((el) => {
     el.addEventListener("click", () => {
+      if (!inputReady) return;
       index = Number(el.dataset.i);
-      sync(true);
+      sfx.play("tap");
+      void sync(true);
     });
   });
   const active = listEl.querySelector(".is-active");
@@ -106,10 +129,45 @@ async function sync(reloadSprite: boolean) {
   if (reloadSprite) await stage.show(pet);
 }
 
+function clearGenFilter() {
+  filterGen = "all";
+  index = 0;
+  void sync(true);
+}
+
 bus.on((action, pressed) => {
+  // SELECT: short press = clear filter (on release); long press = mute toggle
+  if (action === "select") {
+    if (pressed) {
+      void sfx.unlock();
+      selectWasLong = false;
+      if (selectHoldTimer != null) window.clearTimeout(selectHoldTimer);
+      selectHoldTimer = window.setTimeout(() => {
+        selectWasLong = true;
+        selectHoldTimer = null;
+        sfx.toggleMute();
+      }, 650);
+      return;
+    }
+    if (selectHoldTimer != null) {
+      window.clearTimeout(selectHoldTimer);
+      selectHoldTimer = null;
+    }
+    if (!selectWasLong && inputReady) {
+      sfx.playAction("select");
+      clearGenFilter();
+    }
+    return;
+  }
+
   if (!pressed) return;
+  void sfx.unlock();
+  sfx.playAction(action);
+
+  if (!inputReady) return;
   const list = visiblePets();
   if (!list.length) return;
+
   if (action === "up") {
     index = (index - 1 + list.length) % list.length;
     void sync(true);
@@ -132,23 +190,44 @@ bus.on((action, pressed) => {
     else filterGen = (filterGen as number) + 1;
     index = 0;
     void sync(true);
-  } else if (action === "select") {
-    filterGen = "all";
-    index = 0;
-    void sync(true);
   }
 });
 
+function finishBootSequence() {
+  bootEl.classList.add("is-done");
+  bootEl.setAttribute("aria-busy", "false");
+  gbaEl.classList.remove("is-booting");
+  inputReady = true;
+  sfx.play("boot");
+  window.setTimeout(() => bootEl.remove(), 600);
+}
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+}
+
 async function boot() {
+  const reduced =
+    typeof matchMedia === "function" &&
+    matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const minSplash = reduced ? 200 : 1800;
+
   try {
-    pets = await loadPets();
-    // Prefer gen1 first for snappy demo feel in list order already by id
-    index = 0;
-    await sync(true);
+    await Promise.all([
+      loadPets().then((data) => {
+        pets = data;
+        index = 0;
+        return sync(true);
+      }),
+      wait(minSplash),
+    ]);
   } catch (e) {
     nameEl.textContent = "Load failed";
     descEl.textContent = String(e);
+    await wait(reduced ? 100 : 900);
   }
+
+  finishBootSequence();
 }
 
 boot();
