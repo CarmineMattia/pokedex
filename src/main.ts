@@ -11,7 +11,9 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <div class="console-stage" id="consoleStage">
     <button type="button" class="inspect-toggle" id="inspectToggle" title="Inspect console (360°)" aria-pressed="false" aria-label="Toggle 360 degree console inspect">
-      <span class="inspect-icon" aria-hidden="true">◉</span>
+      <svg class="inspect-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="currentColor" d="M12 5c-5 0-9.3 3.1-11 7 1.7 3.9 6 7 11 7s9.3-3.1 11-7c-1.7-3.9-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+      </svg>
     </button>
     <div class="console-viewport" id="consoleViewport" aria-hidden="true"></div>
     <div class="gba is-booting" role="application" aria-label="Pokédex">

@@ -160,6 +160,10 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
+.inspect-toggle[hidden] {
+  display: none !important;
+}
+
 .inspect-icon {
   width: 1.2rem;
   height: 1.2rem;
