@@ -17,6 +17,8 @@ export class PetStage {
   private acc = 0;
   private raf = 0;
   private statusEl: HTMLElement | null = null;
+  /** Bumps on every show() so stale async loads cannot stack meshes. */
+  private loadId = 0;
 
   private dragX = 0;
   private dragging = false;
@@ -36,6 +38,7 @@ export class PetStage {
       alpha: true,
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setClearColor(0x000000, 0);
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
@@ -56,6 +59,7 @@ export class PetStage {
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.55;
+    ground.name = "ground";
     this.scene.add(ground);
 
     this.bindDragRotate();
@@ -101,16 +105,17 @@ export class PetStage {
   resize() {
     const parent = this.canvas.parentElement;
     if (!parent) return;
-    const w = parent.clientWidth || 320;
-    const h = parent.clientHeight || 200;
+    const w = Math.max(1, parent.clientWidth || 320);
+    const h = Math.max(1, parent.clientHeight || 200);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
 
   async show(pet: Pet) {
+    const id = ++this.loadId;
     this.setStatus(`Loading ${pet.name}…`);
-    this.clearMesh();
+    this.clearPetMeshes();
 
     const loader = new THREE.TextureLoader();
     loader.crossOrigin = "anonymous";
@@ -119,6 +124,10 @@ export class PetStage {
       const tex = await new Promise<THREE.Texture>((resolve, reject) => {
         loader.load(spritesheetUrl(pet.slug), resolve, undefined, reject);
       });
+      if (id !== this.loadId) {
+        tex.dispose();
+        return;
+      }
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.magFilter = THREE.NearestFilter;
       tex.minFilter = THREE.NearestFilter;
@@ -134,15 +143,19 @@ export class PetStage {
         map: tex,
         transparent: true,
         alphaTest: 0.05,
+        depthWrite: false,
       });
       this.mesh = new THREE.Mesh(geo, mat);
+      this.mesh.name = "pet";
       this.mesh.position.y = 0.05;
       this.scene.add(this.mesh);
+      this.resize();
       this.setStatus(`${pet.name} · spritesheet`);
     } catch {
-      // Fallback: preview gif via image plane using canvas texture from Image
+      if (id !== this.loadId) return;
       try {
         const img = await loadImage(previewUrl(pet.slug));
+        if (id !== this.loadId) return;
         const tex = new THREE.Texture(img);
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.needsUpdate = true;
@@ -154,18 +167,24 @@ export class PetStage {
         const mat = new THREE.MeshBasicMaterial({
           map: tex,
           transparent: true,
+          depthWrite: false,
         });
         this.mesh = new THREE.Mesh(geo, mat);
+        this.mesh.name = "pet";
         this.scene.add(this.mesh);
+        this.resize();
         this.setStatus(`${pet.name} · preview`);
       } catch {
+        if (id !== this.loadId) return;
         const geo = new THREE.CapsuleGeometry(0.28, 0.45, 4, 12);
         const mat = new THREE.MeshStandardMaterial({
           color: 0x4a9eff,
           roughness: 0.4,
         });
         this.mesh = new THREE.Mesh(geo, mat);
+        this.mesh.name = "pet";
         this.scene.add(this.mesh);
+        this.resize();
         this.setStatus(`${pet.name} · placeholder`);
       }
     }
@@ -178,49 +197,69 @@ export class PetStage {
 
   private applyFrame() {
     if (!this.texture) return;
-    // Idle row = row 0 (top of spritesheet in UV is v=1)
     const col = this.frame % COLS;
     const row = 0;
     this.texture.repeat.set(1 / COLS, 1 / ROWS);
     this.texture.offset.set(col / COLS, 1 - (row + 1) / ROWS);
   }
 
-  private clearMesh() {
-    if (this.mesh) {
-      this.scene.remove(this.mesh);
-      this.mesh.geometry.dispose();
-      const mat = this.mesh.material;
-      if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
-      else mat.dispose();
-      this.mesh = null;
+  /** Remove every pet billboard (not ground/lights) so rapid swaps never stack. */
+  private clearPetMeshes() {
+    const doomed: THREE.Object3D[] = [];
+    this.scene.traverse((obj) => {
+      if (obj instanceof THREE.Mesh && obj.name === "pet") doomed.push(obj);
+    });
+    if (this.mesh && !doomed.includes(this.mesh)) doomed.push(this.mesh);
+
+    for (const obj of doomed) {
+      this.scene.remove(obj);
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        const mat = obj.material;
+        if (Array.isArray(mat)) {
+          mat.forEach((m) => {
+            if ("map" in m && m.map) (m.map as THREE.Texture).dispose();
+            m.dispose();
+          });
+        } else {
+          if ("map" in mat && mat.map) (mat.map as THREE.Texture).dispose();
+          mat.dispose();
+        }
+      }
     }
+    this.mesh = null;
     if (this.texture) {
-      this.texture.dispose();
+      // may already be disposed via material.map
+      try {
+        this.texture.dispose();
+      } catch {
+        /* ignore */
+      }
       this.texture = null;
     }
   }
 
   private loop = (t: number) => {
     this.raf = requestAnimationFrame(this.loop);
-    const dt = t - (this as unknown as { _last?: number })._last! || 16;
+    const last = (this as unknown as { _last?: number })._last ?? t;
+    const dt = Math.min(64, t - last || 16);
     (this as unknown as { _last: number })._last = t;
     this.acc += dt;
     if (this.texture && this.texture.image && this.acc > 120) {
       this.acc = 0;
-      // only animate if it looks like a spritesheet
       const img = this.texture.image as HTMLImageElement;
       if (img.width >= CELL_W * 4) {
         this.frame = (this.frame + 1) % COLS;
         this.applyFrame();
       }
     }
-    if (this.mesh) this.mesh.rotation.y += 0.003;
+    if (this.mesh && !this.dragging) this.mesh.rotation.y += 0.003;
     this.renderer.render(this.scene, this.camera);
   };
 
   dispose() {
     cancelAnimationFrame(this.raf);
-    this.clearMesh();
+    this.clearPetMeshes();
     this.renderer.dispose();
   }
 }

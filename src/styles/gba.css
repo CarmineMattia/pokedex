@@ -975,17 +975,43 @@ body {
 
   .screen {
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(88px, 28%) minmax(0, 1fr);
+    grid-template-rows: auto minmax(100px, 32%) minmax(140px, 1fr);
     min-height: 0;
   }
 
   .list-pane {
     border-right: none;
     border-bottom: 2px solid var(--lcd-dim);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    isolation: isolate;
+    z-index: 2;
+    background: linear-gradient(180deg, #d5ebe0, var(--lcd));
+  }
+
+  .detail-pane {
+    isolation: isolate;
+    z-index: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .stage-wrap {
-    min-height: 0;
+    min-height: 120px;
+    height: 100%;
+    flex: 1;
+    isolation: isolate;
+    z-index: 1;
+  }
+
+  .stage-canvas {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 1;
   }
 
   .detail-desc {
@@ -1122,8 +1148,12 @@ body {
   }
 
   .screen {
-    grid-template-rows: auto minmax(96px, 30%) minmax(0, 1fr);
+    grid-template-rows: auto minmax(110px, 34%) minmax(150px, 1fr);
     min-height: 0;
+  }
+
+  .list-pane {
+    max-height: none;
   }
 
   .list-item {
@@ -1151,7 +1181,7 @@ body {
   }
 
   .stage-wrap {
-    min-height: 0;
+    min-height: 130px;
   }
 
   .controls {

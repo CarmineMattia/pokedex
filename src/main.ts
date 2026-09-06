@@ -129,6 +129,13 @@ document.querySelectorAll<HTMLElement>("[data-action]").forEach((el) => {
 const stage = new PetStage(stageHost, stageStatus);
 stage.onRotate = () => sfx.playRotateTick();
 window.addEventListener("resize", () => stage.resize());
+window.addEventListener("orientationchange", () => {
+  requestAnimationFrame(() => stage.resize());
+});
+// Recalc WebGL size when the LCD flex layout settles (esp. mobile portrait).
+if (typeof ResizeObserver !== "undefined") {
+  new ResizeObserver(() => stage.resize()).observe(stageHost);
+}
 
 const consoleInspect = new ConsoleInspect(consoleStage, consoleViewport, gbaEl);
 consoleInspect.onChange = (on) => {
@@ -240,7 +247,10 @@ async function sync(reloadSprite: boolean) {
   metaEl.textContent = `#${padId(pet.pokedex_id)} · Gen ${pet.gen} · ${pet.style.toUpperCase()} · ${pet.category}`;
   descEl.textContent = pet.description;
   renderList();
-  if (reloadSprite) await stage.show(pet);
+  if (reloadSprite) {
+    await stage.show(pet);
+    stage.resize();
+  }
 }
 
 function clearGenFilter() {
