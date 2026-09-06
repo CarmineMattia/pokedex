@@ -18,7 +18,6 @@ type Tone = {
 export class Sfx {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
-  private unlocked = false;
   muted = false;
   private lastRotateAt = 0;
   private unlockCleanups: Array<() => void> = [];
@@ -49,7 +48,6 @@ export class Sfx {
       }
     }
     if (ctx.state === "running") {
-      this.unlocked = true;
       for (const off of this.unlockCleanups.splice(0)) off();
     }
   }
@@ -76,7 +74,20 @@ export class Sfx {
   play(cue: SfxCue) {
     if (cue !== "mute" && cue !== "unmute" && this.muted) return;
     const ctx = this.ensureCtx();
-    if (!this.unlocked && ctx.state !== "running") return;
+    if (ctx.state === "suspended") {
+      // Schedule after resume so the first gesture still hears a blip
+      void ctx.resume().then(() => {
+        for (const off of this.unlockCleanups.splice(0)) off();
+        this.playNow(cue);
+      });
+      return;
+    }
+    this.playNow(cue);
+  }
+
+  private playNow(cue: SfxCue) {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== "running") return;
 
     const tones = cues[cue];
     if (!tones) return;
